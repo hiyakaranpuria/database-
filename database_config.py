@@ -21,11 +21,11 @@ class DatabaseConfig:
     product_collection: Optional[str] = None
     
     @classmethod
-    def restaurant_config(cls):
+    def database_config(cls):
         return cls(
             connection_string="mongodb://localhost:27017",
             database_name="ai_test_db",
-            domain="restaurant",
+            domain="database",
             amount_fields=["amount", "total", "price", "cost"],
             date_fields=["orderDate", "createdAt", "paymentDate"],
             status_fields=["status"],
@@ -68,10 +68,12 @@ class DatabaseConfig:
     @classmethod
     def from_env(cls):
         """Load configuration from environment variables"""
-        domain = os.getenv("DB_DOMAIN", "restaurant")
+        domain = os.getenv("DB_DOMAIN", "database")
         
-        if domain == "restaurant":
-            return cls.restaurant_config()
+        if domain == "database":
+            return cls.database_config()
+        elif domain == "restaurant":
+            return cls.database_config()  # Use database config for restaurant too
         elif domain == "ecommerce":
             return cls.ecommerce_config()
         elif domain == "finance":

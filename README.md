@@ -1,6 +1,6 @@
 # 🚀 AI Database Analytics Tool
 
-Complete database analytics tool with interactive visualizations and natural language querying. Includes sample restaurant data with 17,000+ records for immediate testing.
+Complete database analytics tool with interactive visualizations and natural language querying. Includes sample business data with 17,000+ records for immediate testing.
 
 ## ✨ Features
 

@@ -6,9 +6,9 @@ from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
 import numpy as np
 from metadata_provider import extract_metadata
-from dynamic_query_generator import generate_mongo_query
+from enhanced_query_engine import generate_enhanced_query
 from dynamic_query_executor import execute_mongo_query
-from dynamic_response_formatter import format_final_answer
+from enhanced_response_formatter import format_enhanced_answer
 from memory_manager import save_message, get_chat_history
 from database_config import config
 from pymongo import MongoClient
@@ -214,7 +214,7 @@ if analysis_type == "Chat Interface":
     with st.sidebar:
         st.header("Database Info")
         metadata = extract_metadata()
-        st.write(f"**Domain:** {config.domain}")
+        st.write(f"**Domain:** {config.domain.title()}")
         st.write(f"**Database:** {config.database_name}")
         st.write("**Collections:**")
         for collection, info in metadata.items():
@@ -238,14 +238,14 @@ if analysis_type == "Chat Interface":
 
         with st.spinner("Analyzing your data..."):
             try:
-                # Generate query dynamically
-                query_str = generate_mongo_query(user_input)
+                # Generate query using enhanced engine
+                query_str = generate_enhanced_query(user_input)
                 
                 # Execute query with context
                 raw_results = execute_mongo_query(query_str, user_input)
                 
-                # Format answer dynamically
-                friendly_answer = format_final_answer(user_input, raw_results)
+                # Format answer using enhanced formatter
+                friendly_answer = format_enhanced_answer(user_input, raw_results)
                 
             except Exception as e:
                 friendly_answer = f"Sorry, I encountered an error: {str(e)}"
@@ -634,24 +634,19 @@ elif analysis_type == "Custom Query":
             st.warning("Please enter a query to execute.")
 
 # Example queries sidebar
-st.sidebar.header("💡 Try These Queries")
-if config.domain == "restaurant":
-    examples = [
-        "Show total sales for 2024",
-        "Which products sold the least this year?",
-        "Compare sales between 2023 and 2024",
-        "Show monthly sales trends",
-        "Who are our top 10 customers?",
-        "Which city generates most revenue?"
-    ]
-else:
-    examples = [
-        "Show me a summary of the data",
-        "What's our total revenue?",
-        "Show sales trends over time",
-        "Which products perform best?",
-        "Analyze customer behavior"
-    ]
+st.sidebar.header("💡 Try These Intelligent Queries")
+examples = [
+    "Show total sales this year",
+    "Which items sold least this month?",
+    "Who are our top 10 customers by spending?",
+    "Show me seasonal sales patterns",
+    "Which customers haven't ordered recently?",
+    "Compare sales by location",
+    "What's our average order value?",
+    "Show me declining products",
+    "Customer lifetime value analysis",
+    "Monthly sales trends"
+]
 
 for example in examples:
     if st.sidebar.button(example, key=f"example_{example}"):
