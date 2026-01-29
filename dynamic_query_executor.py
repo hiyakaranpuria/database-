@@ -41,12 +41,22 @@ class DynamicQueryExecutor:
         question_lower = question.lower()
         query_lower = query_str.lower()
         
+        # Sales/revenue queries should use orders collection
+        if any(word in question_lower for word in ['sales', 'revenue', 'total sales', 'income']):
+            if 'orders' in self.metadata:
+                return 'orders'
+        
         # Direct collection name mentions
         for collection in self.metadata.keys():
             if collection.lower() in question_lower:
                 return collection
         
-        # Field-based detection
+        # Field-based detection - prioritize orders for amount fields
+        if 'amount' in query_lower or '$sum' in query_lower:
+            if 'orders' in self.metadata:
+                return 'orders'
+        
+        # Check other field matches
         for collection, info in self.metadata.items():
             fields = info.get('fields', {})
             
@@ -55,15 +65,19 @@ class DynamicQueryExecutor:
                 if field.lower() in question_lower or field.lower() in query_lower:
                     return collection
         
-        # Intent-based fallback
-        if any(word in question_lower for word in ['sales', 'revenue', 'order', 'purchase']):
+        # Intent-based fallback - prefer orders for financial queries
+        if any(word in question_lower for word in ['sales', 'revenue', 'order', 'purchase', 'total', 'amount']):
+            if 'orders' in self.metadata:
+                return 'orders'
             # Look for collections with amount/price fields
             for collection, info in self.metadata.items():
                 fields = info.get('fields', {})
                 if any(field in ['amount', 'price', 'total', 'cost'] for field in fields.keys()):
                     return collection
         
-        # Default to first collection
+        # Default to orders if available, otherwise first collection
+        if 'orders' in self.metadata:
+            return 'orders'
         return list(self.metadata.keys())[0] if self.metadata else 'orders'
 
 # Global instance

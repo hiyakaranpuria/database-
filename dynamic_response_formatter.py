@@ -17,17 +17,14 @@ class DynamicResponseFormatter:
         # Determine response type based on data structure
         first_item = raw_data[0]
         
-        # Handle count results
-        if isinstance(first_item, dict) and ('total' in first_item or 'count' in str(first_item).lower()):
-            count_value = first_item.get('total', first_item.get('totalOrders', 0))
-            entity = self._guess_entity_from_question(question)
-            return f"There are **{count_value:,}** {entity} in the database."
-        
-        # Handle aggregation results (sum, avg, min, max)
-        elif isinstance(first_item, dict) and len(first_item) == 2 and '_id' in first_item:
+        # Handle aggregation results first (sales, revenue, etc.)
+        if isinstance(first_item, dict) and len(first_item) == 2 and '_id' in first_item:
             for key, value in first_item.items():
                 if key != '_id' and isinstance(value, (int, float)):
-                    if 'total' in key.lower() or 'sum' in key.lower():
+                    # Check if it's a sales/revenue query
+                    if any(word in question_lower for word in ['sales', 'revenue', 'total sales', 'income']):
+                        return f"The total sales amount is **${value:,.2f}**"
+                    elif 'total' in key.lower() or 'sum' in key.lower():
                         return f"The total amount is **${value:,.2f}**"
                     elif 'avg' in key.lower() or 'average' in key.lower():
                         return f"The average value is **${value:.2f}**"
@@ -35,6 +32,17 @@ class DynamicResponseFormatter:
                         return f"The maximum value is **${value:,.2f}**"
                     elif 'min' in key.lower():
                         return f"The minimum value is **${value:,.2f}**"
+        
+        # Handle count results
+        elif isinstance(first_item, dict) and (
+            'count' in str(first_item).lower() or 
+            any(word in question_lower for word in ['how many', 'count', 'number of']) or
+            (len(first_item) == 1 and 'total' in first_item and 
+             not any(word in question_lower for word in ['sales', 'revenue', 'amount']))
+        ):
+            count_value = first_item.get('total', first_item.get('totalOrders', 0))
+            entity = self._guess_entity_from_question(question)
+            return f"There are **{count_value:,}** {entity} in the database."
         
         # Handle list results - format based on detected fields
         else:

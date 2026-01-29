@@ -1,6 +1,13 @@
 import json
 import re
+from datetime import datetime
 from metadata_provider import extract_metadata
+
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return {"$date": obj.isoformat() + "Z"}
+        return super().default(obj)
 
 class DynamicQueryGenerator:
     def __init__(self):
@@ -13,6 +20,13 @@ class DynamicQueryGenerator:
         
         # Find mentioned collections or related terms
         relevant_collections = []
+        
+        # Sales/revenue queries should target orders collection
+        if any(word in question_lower for word in ['sales', 'revenue', 'total sales', 'income']):
+            if 'orders' in self.collections:
+                relevant_collections.append('orders')
+        
+        # Direct collection mentions
         for collection in self.collections:
             if collection.lower() in question_lower:
                 relevant_collections.append(collection)
@@ -26,9 +40,12 @@ class DynamicQueryGenerator:
                         relevant_collections.append(collection)
                         break
         
-        # Default to first collection if nothing found
+        # For sales/revenue queries, default to orders
         if not relevant_collections:
-            relevant_collections = [self.collections[0]] if self.collections else ['orders']
+            if any(word in question_lower for word in ['sales', 'revenue', 'total', 'amount']):
+                relevant_collections = ['orders']
+            else:
+                relevant_collections = [self.collections[0]] if self.collections else ['orders']
             
         return {
             'collections': relevant_collections,
@@ -38,7 +55,9 @@ class DynamicQueryGenerator:
     
     def _determine_intent(self, question):
         """Determine what the user wants to do"""
-        if any(word in question for word in ['total', 'sum', 'sales', 'revenue']):
+        if any(word in question for word in ['total sales', 'total revenue', 'sales total']):
+            return 'aggregate_sum'
+        elif any(word in question for word in ['total', 'sum', 'sales', 'revenue']):
             return 'aggregate_sum'
         elif any(word in question for word in ['count', 'how many', 'number of']):
             return 'count'
@@ -85,18 +104,22 @@ class DynamicQueryGenerator:
         
         # Add date filter if year specified
         if 'year' in filters:
-            year = filters['year']
+            year = int(filters['year'])
             date_fields = self._find_date_fields(collection)
             if date_fields:
                 date_field = date_fields[0]
+                from datetime import datetime
                 match_stage[date_field] = {
-                    "$gte": {"$date": f"{year}-01-01T00:00:00Z"},
-                    "$lt": {"$date": f"{int(year)+1}-01-01T00:00:00Z"}
+                    "$gte": datetime(year, 1, 1),
+                    "$lt": datetime(year + 1, 1, 1)
                 }
         
-        # Add status filter if specified
+        # Add status filter if specified or if it's a sales query
         if 'status' in filters and self._has_field(collection, 'status'):
             match_stage['status'] = filters['status']
+        elif intent == 'aggregate_sum' and self._has_field(collection, 'status'):
+            # For sales queries, default to completed orders
+            match_stage['status'] = 'completed'
         
         # Build pipeline based on intent
         pipeline = []
@@ -145,7 +168,7 @@ class DynamicQueryGenerator:
                 {"$limit": 10}
             ])
         
-        return json.dumps(pipeline, default=str), collection
+        return json.dumps(pipeline, cls=DateTimeEncoder), collection
     
     def _find_amount_field(self, collection):
         """Find fields that likely contain monetary amounts"""
@@ -191,4 +214,4 @@ def generate_mongo_query(prompt: str) -> str:
         return query
     except Exception as e:
         # Fallback to simple query
-        return json.dumps([{"$limit": 10}], default=str)
+        return json.dumps([{"$limit": 10}], cls=DateTimeEncoder)
