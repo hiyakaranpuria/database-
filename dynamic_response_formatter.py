@@ -78,7 +78,29 @@ class DynamicResponseFormatter:
         
         # Detect data type based on fields
         fields = list(sample_item.keys())
+        question_lower = question.lower()
         
+        # Handle product analysis results
+        if 'productName' in fields and 'totalSales' in fields:
+            if any(word in question_lower for word in ['least', 'worst', 'lowest']):
+                response = "Here are the **worst performing products**:\n\n"
+            elif any(word in question_lower for word in ['most', 'best', 'highest', 'top']):
+                response = "Here are the **best performing products**:\n\n"
+            else:
+                response = "Here are the product performance results:\n\n"
+            
+            for i, item in enumerate(data[:10], 1):
+                name = item.get('productName', 'Unknown Product')
+                sales = item.get('totalSales', 0)
+                quantity = item.get('quantitySold', 0)
+                response += f"{i}. **{name}** - ${sales:,.2f} ({quantity} units sold)\n"
+            
+            if len(data) > 10:
+                response += f"\n... and {len(data) - 10} more products"
+            
+            return response
+        
+        # Original formatting logic for other data types
         response = "Here's what I found:\n\n"
         
         for i, item in enumerate(data[:10], 1):  # Limit to 10 items

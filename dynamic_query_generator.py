@@ -21,10 +21,20 @@ class DynamicQueryGenerator:
         # Find mentioned collections or related terms
         relevant_collections = []
         
-        # Sales/revenue queries should target orders collection
-        if any(word in question_lower for word in ['sales', 'revenue', 'total sales', 'income']):
+        # Product queries should analyze orders with product joins
+        if any(word in question_lower for word in ['product', 'products', 'item', 'items']):
             if 'orders' in self.collections:
                 relevant_collections.append('orders')
+        
+        # Sales/revenue queries should target orders collection
+        elif any(word in question_lower for word in ['sales', 'revenue', 'total sales', 'income']):
+            if 'orders' in self.collections:
+                relevant_collections.append('orders')
+        
+        # Customer queries should target customers collection
+        elif any(word in question_lower for word in ['customer', 'customers', 'client', 'clients']):
+            if 'customers' in self.collections:
+                relevant_collections.append('customers')
         
         # Direct collection mentions
         for collection in self.collections:
@@ -40,9 +50,9 @@ class DynamicQueryGenerator:
                         relevant_collections.append(collection)
                         break
         
-        # For sales/revenue queries, default to orders
+        # For sales/revenue/product queries, default to orders
         if not relevant_collections:
-            if any(word in question_lower for word in ['sales', 'revenue', 'total', 'amount']):
+            if any(word in question_lower for word in ['sales', 'revenue', 'total', 'amount', 'product', 'sold', 'least', 'most']):
                 relevant_collections = ['orders']
             else:
                 relevant_collections = [self.collections[0]] if self.collections else ['orders']
@@ -55,7 +65,11 @@ class DynamicQueryGenerator:
     
     def _determine_intent(self, question):
         """Determine what the user wants to do"""
-        if any(word in question for word in ['total sales', 'total revenue', 'sales total']):
+        if any(word in question for word in ['least', 'worst', 'lowest', 'bottom']):
+            return 'min_analysis'
+        elif any(word in question for word in ['most', 'best', 'highest', 'top']):
+            return 'max_analysis'
+        elif any(word in question for word in ['total sales', 'total revenue', 'sales total']):
             return 'aggregate_sum'
         elif any(word in question for word in ['total', 'sum', 'sales', 'revenue']):
             return 'aggregate_sum'
@@ -152,15 +166,85 @@ class DynamicQueryGenerator:
                     }
                 })
                 
-        elif intent in ['max', 'min']:
-            amount_field = self._find_amount_field(collection)
-            if amount_field:
-                pipeline.append({
-                    "$group": {
-                        "_id": None,
-                        intent: {f"${intent}": f"${amount_field}"}
-                    }
-                })
+        elif intent == 'min_analysis':
+            # For product analysis queries like "which product sold least"
+            if any(word in question.lower() for word in ['product', 'item']):
+                pipeline.extend([
+                    {
+                        "$group": {
+                            "_id": "$productId",
+                            "totalSales": {"$sum": "$amount"},
+                            "quantitySold": {"$sum": "$quantity"}
+                        }
+                    },
+                    {
+                        "$lookup": {
+                            "from": "products",
+                            "localField": "_id",
+                            "foreignField": "_id",
+                            "as": "product"
+                        }
+                    },
+                    {"$unwind": "$product"},
+                    {
+                        "$project": {
+                            "productName": "$product.name",
+                            "totalSales": 1,
+                            "quantitySold": 1
+                        }
+                    },
+                    {"$sort": {"totalSales": 1}},  # Ascending for least
+                    {"$limit": 10}
+                ])
+            else:
+                amount_field = self._find_amount_field(collection)
+                if amount_field:
+                    pipeline.append({
+                        "$group": {
+                            "_id": None,
+                            "min": {"$min": f"${amount_field}"}
+                        }
+                    })
+                    
+        elif intent == 'max_analysis':
+            # For product analysis queries like "which product sold most"
+            if any(word in question.lower() for word in ['product', 'item']):
+                pipeline.extend([
+                    {
+                        "$group": {
+                            "_id": "$productId",
+                            "totalSales": {"$sum": "$amount"},
+                            "quantitySold": {"$sum": "$quantity"}
+                        }
+                    },
+                    {
+                        "$lookup": {
+                            "from": "products",
+                            "localField": "_id",
+                            "foreignField": "_id",
+                            "as": "product"
+                        }
+                    },
+                    {"$unwind": "$product"},
+                    {
+                        "$project": {
+                            "productName": "$product.name",
+                            "totalSales": 1,
+                            "quantitySold": 1
+                        }
+                    },
+                    {"$sort": {"totalSales": -1}},  # Descending for most
+                    {"$limit": 10}
+                ])
+            else:
+                amount_field = self._find_amount_field(collection)
+                if amount_field:
+                    pipeline.append({
+                        "$group": {
+                            "_id": None,
+                            "max": {"$max": f"${amount_field}"}
+                        }
+                    })
                 
         else:  # list intent
             pipeline.extend([
