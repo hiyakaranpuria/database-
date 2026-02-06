@@ -254,44 +254,35 @@ if analysis_type == "Chat Interface":
         st.chat_message("user").markdown(user_input)
         save_message("user", user_input)
 
-        with st.spinner("Analyzing your data..."):
+        with st.spinner("Analyzing your data (Qwen2.5 + Vector Search)..."):
             try:
-                # Generate query using enhanced engine
-                query_str = generate_enhanced_query(user_input)
-                
-                # Execute query with context
-                raw_results = execute_mongo_query(query_str, user_input)
-                
-                # Format answer using enhanced formatter
-                table_view = format_enhanced_answer(user_input, raw_results)
-                
-                # Generate AI Narrative (Synthesis)
                 try:
-                    narrative = enhanced_engine.generate_narrative(user_input, raw_results)
-                except:
-                    narrative = None
+                    # Use the new MongoDBChatAgent
+                    from mongo_chat_agent import MongoDBChatAgent
+                except ImportError as e:
+                    if "sentence_transformers" in str(e):
+                        raise ImportError("System is installing AI libraries (sentence-transformers). This takes a few minutes. Please wait and refresh the page.")
+                    raise e
                 
-                # Combine Narrative + Table
-                if narrative and "Error" not in narrative:
-                    friendly_answer = f"{narrative}\n\n{table_view}"
-                else:
-                    friendly_answer = table_view
+                # Cache the agent to avoid reloading embeddings per query
+                @st.cache_resource
+                def get_agent():
+                    return MongoDBChatAgent()
+                
+                agent = get_agent()
+                
+                friendly_answer = agent.process_query(user_input)
+                
+            except ImportError as ie:
+                friendly_answer = f"⏳ {str(ie)}"
                 
             except Exception as e:
                 friendly_answer = f"Sorry, I encountered an error: {str(e)}"
-                query_str = "Error generating query"
             
         # Display assistant message
         with st.chat_message("assistant"):
             st.markdown(friendly_answer)
             
-            # Show technical details in expander
-            with st.expander("🔍 Technical Details"):
-                st.write("**Generated Query:**")
-                st.code(query_str, language="json")
-                st.write("**Raw Results:**")
-                st.json(raw_results)
-                
         save_message("assistant", friendly_answer)
         st.session_state.messages.append({"role": "user", "content": user_input})
         st.session_state.messages.append({"role": "assistant", "content": friendly_answer})
